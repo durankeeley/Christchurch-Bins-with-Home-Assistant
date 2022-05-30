@@ -1,70 +1,74 @@
-# Christchurch Bins integration with Home Assistant
+# Christchurch Bins integration with Home Assistant 
 
-Since the creation of the v1 of this CCC (Christchurch City Council) have taken down or blocked the endpoint where the api calls used to be made.
+Christchurch [New Zealand] City Council has a great website for checking what bins need to go out for collection
 
-The mobile app still can give the information but needs a bit of work to be able to run a man-in-the-middle to get the endpoint and authorization.
+![image-20211127165316748](https://raw.githubusercontent.com/durankeeley/Christchurch-Bins-with-Home-Assistant/main/assets/image-20211127165316748.png)
 
-## Prerequisites
 
-Android
+## Setting up the Data for Home Assistant
 
-[Node.js](https://nodejs.org/en/download/) (14+) and [Java](https://www.oracle.com/technetwork/java/javase/downloads/index.html) (8+) for apk-mitm
+To integrate with Home Assistant you need to find out the property ID of your address 
 
-[apk-mitm](https://github.com/shroudedcode/apk-mitm) - A CLI application that automatically prepares Android APK files for HTTPS inspection
-
-[mitmproxy](https://mitmproxy.org/)  - a free and open source interactive HTTPS proxy
-
-## Prepare Android APK file for HTTPS inspection
-
-Download the APK from the play store, there are a few methods out there to do so. Download the architecture that is your device.
-
-run apk-mitm over that apk:
+Using the information on the lookup.js
 
 ```
-$ apk-mitm <path-to-apk>
+https://ccc.govt.nz/resources/ccc-kerbside/client/dist/js/lookuptool.js
 ```
 
-Download the new apk file to your device you want to Man-in-the-middle, trust the source and install the apk.
+![image-20211127170317178](https://raw.githubusercontent.com/durankeeley/Christchurch-Bins-with-Home-Assistant/main/assets/image-20211127170317178.png)
 
-## Using mitmproxy on Android to see requests
-
-Run an instance of mitmproxy and setup your android device to use mitmproxy.
-
-Setup the Christchurch Bin app as you normally would and you will see a GET request with your client_id and client_secret to a url like:
+You can use the rest URL followed by your house number + street address 
 
 ```
-https://ccc-data-citizen-api-v1-prod.au-s1.cloudhub.io/api/v1/properties/<propertyid>
+https://opendata.ccc.govt.nz/CCCSearch/rest/address/suggest?q=
 ```
 
-## Using your client_id, client_secret & URL in Home Assistant
+Example:
 
-That URL will generate a JSON output of that property
+```
+https://opendata.ccc.govt.nz/CCCSearch/rest/address/suggest?q=53+Hereford
+```
 
-![image-20211127171207369](v1/assets/image-20211127171207369.png)
+you will need the "RatingUnitID"
+
+![image-20211127170041061](https://raw.githubusercontent.com/durankeeley/Christchurch-Bins-with-Home-Assistant/main/assets/image-20211127170041061.png)
+
+Now using the information on the lookup.js again all we need to do is use the original website with "/getProperty?ID=[RatingUnitID]":
+
+![image-20211127170759542](https://raw.githubusercontent.com/durankeeley/Christchurch-Bins-with-Home-Assistant/main/assets/image-20211127170759542.png)
+
+![image-20211127170831635](https://raw.githubusercontent.com/durankeeley/Christchurch-Bins-with-Home-Assistant/main/assets/image-20211127170831635.png)
+
+Example:
+
+```
+https://ccc.govt.nz/services/rubbish-and-recycling/collections/getProperty?ID=86089
+```
+
+
+
+That will give you a JSON output of that property:
+
+![image-20211127171207369](https://raw.githubusercontent.com/durankeeley/Christchurch-Bins-with-Home-Assistant/main/assets/image-20211127171207369.png)
+
+## Home Assistant
 
 We need to add the scraping from the API into the configuration.yaml and some logic to get the bin of the week for lovelace
 
 ```yaml
 sensor:
   - platform: rest
-    resource: https://ccc-data-citizen-api-v1-prod.au-s1.cloudhub.io/api/v1/properties/<propertyid>
+    resource: https://ccc.govt.nz/services/rubbish-and-recycling/collections/getProperty?ID=86089
     method: GET
-    headers:
-      client_id: '<client_id>'
-      client_secret: '<client_secret>'
     name: "Christchurch Bin Type"
     value_template: >
       {% set value_json_sort = value_json.bins.collections | sort(attribute='next_planned_date') %}
-      {% set value_json = value_json_sort | rejectattr('material', 'equalto', 'Organic') | map(attribute='material') | l
-ist | first %}
+      {% set value_json = value_json_sort | rejectattr('material', 'equalto', 'Organic') | map(attribute='material') | list | first %}
       {{ value_json}}
     scan_interval: 43200
   - platform: rest
-    resource: https://ccc-data-citizen-api-v1-prod.au-s1.cloudhub.io/api/v1/properties/<propertyid>
+    resource: https://ccc.govt.nz/services/rubbish-and-recycling/collections/getProperty?ID=86089
     method: GET
-    headers:
-      client_id: '<client_id>'
-      client_secret: '<client_secret>'
     name: "Christchurch Bin Date"
     value_template: >
       {% set value_json = value_json.bins.collections | sort(attribute='next_planned_date') | first %}
@@ -74,7 +78,7 @@ ist | first %}
 
 Then add a custom card to lovelace:
 
-```
+```yaml
 type: vertical-stack
 cards:
   - type: custom:button-card
@@ -91,4 +95,4 @@ cards:
     icon: mdi:delete-clock
 ```
 
-![image-20211127173015400.png](v1/assets/image-20211127173015400.png)
+![image-20211127173015400](https://raw.githubusercontent.com/durankeeley/Christchurch-Bins-with-Home-Assistant/main/assets/image-20211127173015400.png)
