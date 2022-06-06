@@ -62,7 +62,7 @@ sensor:
     method: GET
     name: "Christchurch Bin Type"
     value_template: >
-      {% set value_json_sort = value_json.bins.collections | sort(attribute='next_planned_date') %}
+      {% set value_json_sort = value_json.bins.collections | sort(attribute='next_planned_date') | rejectattr('next_planned_date', 'le', (now().strftime('%Y-%m-%d')|string)) %}
       {% set value_json = value_json_sort | rejectattr('material', 'equalto', 'Organic') | map(attribute='material') | list | first %}
       {{ value_json}}
     scan_interval: 43200
@@ -71,8 +71,9 @@ sensor:
     method: GET
     name: "Christchurch Bin Date"
     value_template: >
-      {% set value_json = value_json.bins.collections | sort(attribute='next_planned_date') | first %}
-      {{ value_json.next_planned_date}}
+      {% set value_json_sort = value_json.bins.collections | sort(attribute='next_planned_date') %}
+      {% set value_json = value_json_sort | rejectattr('next_planned_date', 'le', (now().strftime('%Y-%m-%d')|string)) | map(attribute='next_planned_date')| list| first %}
+      {{ value_json }}
     scan_interval: 43200
 ```
 
